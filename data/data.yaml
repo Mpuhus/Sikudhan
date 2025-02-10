@@ -1,0 +1,10 @@
+train: D:/yolov7/new1/images/train
+val: D:/yolov7/new1/images/val
+test: D:/yolov7/new1/test
+
+
+
+nc: 4  # number of classes
+names: ['healthy leaf','wilt leaf','flower', 'fruit']  # list of class names
+
+
