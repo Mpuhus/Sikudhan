@@ -1,4 +1,3 @@
-# Temporary change to force Git commit
 import os
 import torch
 import io
@@ -9,12 +8,23 @@ from fastapi import FastAPI, UploadFile, File
 # Initialize FastAPI app
 app = FastAPI()
 
-# Load YOLOv7 model
-model_path = "best.pt"  # Ensure 'best.pt' is in the project directory
+# Load YOLOv7 model correctly
+model_path = "best.pt"
 if not os.path.exists(model_path):
     raise FileNotFoundError(f"Model file {model_path} not found. Ensure it is uploaded.")
 
-model = torch.hub.load('WongKinYiu/yolov7', 'custom', path=model_path, source='github')
+# Load YOLOv7 model
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+try:
+    from models.experimental import attempt_load
+    from utils.general import non_max_suppression
+
+    model = attempt_load(model_path, map_location=device)  # Correct model loading
+    model.eval()
+
+except Exception as e:
+    raise RuntimeError(f"Error loading YOLOv7 model: {e}")
 
 # Image transformations
 transform = transforms.Compose([
@@ -32,15 +42,16 @@ async def predict(file: UploadFile = File(...)):
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
     # Transform image
-    img_tensor = transform(image).unsqueeze(0)
+    img_tensor = transform(image).unsqueeze(0).to(device)
 
     # Perform inference
-    results = model(img_tensor)
+    with torch.no_grad():
+        results = model(img_tensor)
     
     # Process results
-    predictions = results.pandas().xyxy[0].to_dict(orient="records")
+    detections = non_max_suppression(results)[0].cpu().numpy()
 
-    return {"detections": predictions}
+    return {"detections": detections.tolist()}
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))  # Get PORT from environment variable
